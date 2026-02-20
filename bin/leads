@@ -4,7 +4,17 @@ set -euo pipefail
 # leads — lightweight SQLite issue tracker
 # Usage: leads <command> [args]
 
-SCHEMA_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0")")/.." && pwd)"
+# Resolve symlinks to find the real script location (macOS-compatible)
+_resolve() {
+    local f="$1"
+    while [[ -L "$f" ]]; do
+        local dir="$(cd "$(dirname "$f")" && pwd)"
+        f="$(readlink "$f")"
+        [[ "$f" != /* ]] && f="$dir/$f"
+    done
+    echo "$f"
+}
+SCHEMA_DIR="$(cd "$(dirname "$(_resolve "$0")")/.." && pwd)"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +43,7 @@ ensure_db() {
 
     if [[ ! -f "$db" ]]; then
         mkdir -p "$root/.leads"
-        sqlite3 "$db" < "$SCHEMA_DIR/schema.sql"
+        sqlite3 "$db" < "$SCHEMA_DIR/schema.sql" >/dev/null 2>&1
 
         # Append .leads/ to .gitignore if not already there
         local gi="$root/.gitignore"
@@ -49,7 +59,12 @@ ensure_db() {
 
 sql() {
     local db="$1"; shift
-    sqlite3 -batch "$db" "$@"
+    sqlite3 -batch -noheader -list "$db" "$@"
+}
+
+sql_display() {
+    local db="$1"; shift
+    sqlite3 -batch -header -column "$db" "$@"
 }
 
 # Resolve an argument to an issue ID.
@@ -62,23 +77,27 @@ resolve_id() {
         return
     fi
 
-    local where="title LIKE '%' || ? || '%' COLLATE NOCASE"
+    # Escape single quotes for SQL
+    local escaped="${arg//\'/\'\'}"
+    local where="title LIKE '%${escaped}%' COLLATE NOCASE"
     [[ -n "$status_filter" ]] && where="$where AND status = '$status_filter'"
 
     local matches
-    matches="$(sql "$db" "SELECT id, title FROM issues WHERE $where;" "$arg")"
+    matches="$(sql "$db" "SELECT id, title FROM issues WHERE $where;")"
 
-    local count
-    count="$(echo "$matches" | grep -c '|' || true)"
+    local count=0
+    if [[ -n "$matches" ]]; then
+        count="$(echo "$matches" | wc -l | tr -d ' ')"
+    fi
 
     if [[ "$count" -eq 0 ]]; then
         die "no issue matching '$arg'"
     elif [[ "$count" -eq 1 ]]; then
         echo "$matches" | cut -d'|' -f1
     else
-        info "Multiple matches for '$arg':"
+        printf 'Multiple matches for "%s":\n' "$arg" >&2
         echo "$matches" | while IFS='|' read -r mid mtitle; do
-            printf '  #%-4s %s\n' "$mid" "$mtitle"
+            printf '  #%-4s %s\n' "$mid" "$mtitle" >&2
         done
         exit 1
     fi
@@ -128,7 +147,7 @@ cmd_list() {
     [[ "$show_all" -eq 0 ]] && where="status = 'open'"
     [[ -n "$label" ]] && where="$where AND label = '$label'"
 
-    sql "$db" -header -column "SELECT id, label, status, substr(title, 1, 60) AS title FROM issues WHERE $where ORDER BY id;"
+    sql_display "$db" "SELECT id, label, status, substr(title, 1, 60) AS title FROM issues WHERE $where ORDER BY id;"
 }
 
 cmd_show() {
@@ -137,7 +156,7 @@ cmd_show() {
     db="$(ensure_db)"
     local id
     id="$(resolve_id "$db" "$1")"
-    sql "$db" -header -column "SELECT * FROM issues WHERE id = $id;"
+    sql_display "$db" "SELECT * FROM issues WHERE id = $id;"
 }
 
 cmd_close() {
@@ -183,14 +202,14 @@ cmd_edit() {
     [[ -n "$title" ]] && sql "$db" "UPDATE issues SET title = ? WHERE id = $id;" "$title"
     [[ -n "$label" ]] && sql "$db" "UPDATE issues SET label = ? WHERE id = $id;" "$label"
 
-    sql "$db" -header -column "SELECT id, label, title FROM issues WHERE id = $id;"
+    sql_display "$db" "SELECT id, label, title FROM issues WHERE id = $id;"
 }
 
 cmd_ready() {
     local db
     db="$(ensure_db)"
     local result
-    result="$(sql "$db" -header -column "SELECT id, label, title FROM issues WHERE status = 'open' ORDER BY id LIMIT 1;")"
+    result="$(sql_display "$db" "SELECT id, label, title FROM issues WHERE status = 'open' ORDER BY id LIMIT 1;")"
     if [[ -z "$result" ]]; then
         info "No open issues."
     else
@@ -211,35 +230,33 @@ cmd_migrate() {
     count="$(sql "$db" "SELECT COUNT(*) FROM issues;")"
     [[ "$count" -gt 0 ]] && die "leads DB already has $count issues — migrate only works on empty DB"
 
-    # Import from beads, mapping labels
-    sql "$db" "ATTACH '$beads_db' AS beads;"
-
-    sql "$db" "
-        INSERT INTO issues (title, label, status, created, beads_id)
-        SELECT
-            i.title,
-            CASE l.label
-                WHEN 'enhancement' THEN 'feature'
-                WHEN 'security' THEN 'bug'
-                ELSE COALESCE(l.label, 'bug')
-            END,
-            i.status,
-            i.created_at,
-            i.id
-        FROM beads.issues i
-        LEFT JOIN beads.labels l ON i.id = l.issue_id
-        WHERE i.issue_type = 'task'
-        ORDER BY i.created_at;
-    "
-
-    sql "$db" "DETACH beads;"
+    # Import from beads, mapping labels (single invocation for ATTACH scope)
+    sqlite3 -batch "$db" >/dev/null 2>&1 <<EOSQL
+ATTACH '$beads_db' AS beads;
+INSERT INTO issues (title, label, status, created, beads_id)
+SELECT
+    i.title,
+    CASE l.label
+        WHEN 'enhancement' THEN 'feature'
+        WHEN 'security' THEN 'bug'
+        ELSE COALESCE(l.label, 'bug')
+    END,
+    i.status,
+    i.created_at,
+    i.id
+FROM beads.issues i
+LEFT JOIN beads.labels l ON i.id = l.issue_id
+WHERE i.issue_type = 'task'
+ORDER BY i.created_at;
+DETACH beads;
+EOSQL
 
     local imported
     imported="$(sql "$db" "SELECT COUNT(*) FROM issues;")"
     info "Migrated $imported issues from beads."
 
     # Show summary by label
-    sql "$db" -header -column "SELECT label, COUNT(*) AS count FROM issues GROUP BY label ORDER BY count DESC;"
+    sql_display "$db" "SELECT label, COUNT(*) AS count FROM issues GROUP BY label ORDER BY count DESC;"
 }
 
 cmd_help() {
