@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# leads — lightweight SQLite issue tracker
-# Usage: leads <command> [args]
+# op-tasks — lightweight SQLite issue tracker
+# Usage: op-tasks <command> [args]
 
 # Resolve symlinks to find the real script location (macOS-compatible)
 _resolve() {
@@ -33,24 +33,24 @@ find_git_root() {
 db_path() {
     local root
     root="$(find_git_root)"
-    echo "$root/.leads/issues.db"
+    echo "$root/.op-tasks/issues.db"
 }
 
 ensure_db() {
     local db root
     root="$(find_git_root)"
-    db="$root/.leads/issues.db"
+    db="$root/.op-tasks/issues.db"
 
     if [[ ! -f "$db" ]]; then
-        mkdir -p "$root/.leads"
+        mkdir -p "$root/.op-tasks"
         sqlite3 "$db" < "$SCHEMA_DIR/schema.sql" >/dev/null 2>&1
 
-        # Append .leads/ to .gitignore if not already there
+        # Append .op-tasks/ to .gitignore if not already there
         local gi="$root/.gitignore"
         if [[ -f "$gi" ]]; then
-            grep -qxF '.leads/' "$gi" 2>/dev/null || echo '.leads/' >> "$gi"
+            grep -qxF '.op-tasks/' "$gi" 2>/dev/null || echo '.op-tasks/' >> "$gi"
         else
-            echo '.leads/' > "$gi"
+            echo '.op-tasks/' > "$gi"
         fi
     fi
 
@@ -120,7 +120,7 @@ cmd_add() {
             *)  title="$1"; shift ;;
         esac
     done
-    [[ -z "$title" ]] && die "usage: leads add \"title\" [-l label]"
+    [[ -z "$title" ]] && die "usage: op-tasks add \"title\" [-l label]"
 
     local db
     db="$(ensure_db)"
@@ -151,7 +151,7 @@ cmd_list() {
 }
 
 cmd_show() {
-    [[ $# -lt 1 ]] && die "usage: leads show <id-or-title>"
+    [[ $# -lt 1 ]] && die "usage: op-tasks show <id-or-title>"
     local db
     db="$(ensure_db)"
     local id
@@ -160,7 +160,7 @@ cmd_show() {
 }
 
 cmd_close() {
-    [[ $# -lt 1 ]] && die "usage: leads close <id-or-title>"
+    [[ $# -lt 1 ]] && die "usage: op-tasks close <id-or-title>"
     local db
     db="$(ensure_db)"
     local id
@@ -172,7 +172,7 @@ cmd_close() {
 }
 
 cmd_reopen() {
-    [[ $# -lt 1 ]] && die "usage: leads reopen <id-or-title>"
+    [[ $# -lt 1 ]] && die "usage: op-tasks reopen <id-or-title>"
     local db
     db="$(ensure_db)"
     local id
@@ -184,7 +184,7 @@ cmd_reopen() {
 }
 
 cmd_edit() {
-    [[ $# -lt 1 ]] && die "usage: leads edit <id> [-t title] [-l label]"
+    [[ $# -lt 1 ]] && die "usage: op-tasks edit <id> [-t title] [-l label]"
     local id="$1"; shift
     local title="" label=""
     while [[ $# -gt 0 ]]; do
@@ -228,7 +228,7 @@ cmd_migrate() {
 
     local count
     count="$(sql "$db" "SELECT COUNT(*) FROM issues;")"
-    [[ "$count" -gt 0 ]] && die "leads DB already has $count issues — migrate only works on empty DB"
+    [[ "$count" -gt 0 ]] && die "DB already has $count issues — migrate only works on empty DB"
 
     # Import from beads, mapping labels (single invocation for ATTACH scope)
     sqlite3 -batch "$db" >/dev/null 2>&1 <<EOSQL
@@ -261,7 +261,7 @@ EOSQL
 
 cmd_help() {
     cat <<'EOF'
-leads — lightweight SQLite issue tracker
+op-tasks — lightweight SQLite issue tracker
 
 Commands:
   add "title" [-l label]         Create issue (default label: bug)
@@ -272,10 +272,10 @@ Commands:
   edit <id> [-t "title"] [-l X]  Edit title or label
   ready                          Next open issue (lowest ID)
   migrate                        One-time import from .beads/beads.db
-  init                           Explicitly init .leads/ (also auto-inits)
+  init                           Explicitly init .op-tasks/ (also auto-inits)
 
 Labels: bug, feature, polish, techdebt
-DB location: <git-root>/.leads/issues.db
+DB location: <git-root>/.op-tasks/issues.db
 EOF
 }
 
@@ -294,5 +294,5 @@ case "$1" in
     migrate) shift; cmd_migrate "$@" ;;
     init)    shift; cmd_init "$@" ;;
     help|-h|--help) cmd_help ;;
-    *) die "unknown command: $1 (try 'leads help')" ;;
+    *) die "unknown command: $1 (try 'op-tasks help')" ;;
 esac

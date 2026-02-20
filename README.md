@@ -1,4 +1,4 @@
-# leads
+# op-tasks
 
 Lightweight SQLite issue tracker. Single Bash script, one table, no daemon.
 
@@ -6,28 +6,28 @@ Lightweight SQLite issue tracker. Single Bash script, one table, no daemon.
 
 ```bash
 # Symlink into PATH
-ln -s ~/work/personal/leads/bin/leads ~/.local/bin/leads
+ln -s ~/work/personal/op-tasks/bin/op-tasks ~/.local/bin/op-tasks
 ```
 
 ## Usage
 
 ```bash
-leads add "fix login bug" -l bug        # Create issue
-leads add "dark mode" -l feature         # Create with label
-leads list                               # List open issues
-leads list --all                         # Include closed
-leads list --label bug                   # Filter by label
-leads show 3                             # Show by ID
-leads show "login"                       # Show by title substring
-leads close 3                            # Close issue
-leads reopen 3                           # Reopen issue
-leads edit 3 -t "new title" -l feature   # Edit title/label
-leads ready                              # Next open issue (lowest ID)
+op-tasks add "fix login bug" -l bug        # Create issue
+op-tasks add "dark mode" -l feature         # Create with label
+op-tasks list                               # List open issues
+op-tasks list --all                         # Include closed
+op-tasks list --label bug                   # Filter by label
+op-tasks show 3                             # Show by ID
+op-tasks show "login"                       # Show by title substring
+op-tasks close 3                            # Close issue
+op-tasks reopen 3                           # Reopen issue
+op-tasks edit 3 -t "new title" -l feature   # Edit title/label
+op-tasks ready                              # Next open issue (lowest ID)
 ```
 
 ## Storage
 
-DB lives at `<git-root>/.leads/issues.db`. Auto-created on first command. `.leads/` is auto-added to `.gitignore`.
+DB lives at `<git-root>/.op-tasks/issues.db`. Auto-created on first command. `.op-tasks/` is auto-added to `.gitignore`.
 
 ## Schema
 
@@ -48,7 +48,7 @@ CREATE TABLE issues (
 ## Migration from Beads
 
 ```bash
-leads migrate    # One-time import from .beads/beads.db
+op-tasks migrate    # One-time import from .beads/beads.db
 ```
 
 ## Labels

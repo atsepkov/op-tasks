@@ -1,4 +1,4 @@
-# Leads — Lightweight SQLite Issue Tracker
+# op-tasks — Lightweight SQLite Issue Tracker
 
 ## Overview
 
@@ -6,13 +6,13 @@ Single Bash script wrapping `sqlite3`. One table, no daemon, no sync. Designed f
 
 ## Architecture
 
-- `bin/leads` — the CLI (Bash, ~250 lines)
+- `bin/op-tasks` — the CLI (Bash, ~250 lines)
 - `schema.sql` — single source of truth for DB schema
-- DB lives at `<git-root>/.leads/issues.db` per repo
+- DB lives at `<git-root>/.op-tasks/issues.db` per repo
 
 ## Development
 
-Test changes by running `leads` commands in any git repo. The script auto-inits `.leads/` on first use.
+Test changes by running `op-tasks` commands in any git repo. The script auto-inits `.op-tasks/` on first use.
 
 Schema changes go in `schema.sql` — the CLI reads it on init.
 
