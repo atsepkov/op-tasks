@@ -21,5 +21,5 @@ Schema changes go in `schema.sql` — the CLI reads it on init.
 - Keep it under 300 lines of Bash
 - No external dependencies beyond `sqlite3` and standard Unix tools
 - All SQL uses parameterized queries where possible (sqlite3 positional args)
-- Labels are constrained by CHECK: bug, feature, polish, techdebt
-- Status is binary: open or closed
+- Labels are free-form strings (default: bug)
+- Statuses: ` `=open, `/`=in-progress, `x`=done, `-`=cancelled, `!`=blocked, `?`=unsure
